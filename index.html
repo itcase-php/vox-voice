@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vox — 语音交互助手</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #07080d;
+            --surface: #0e1017;
+            --surface-raised: #14161f;
+            --border: #1c1e2a;
+            --accent: #00dbb5;
+            --accent-soft: rgba(0, 219, 181, 0.12);
+            --accent-glow: rgba(0, 219, 181, 0.2);
+            --purple: #7c5cfc;
+            --purple-soft: rgba(124, 92, 252, 0.12);
+            --amber: #ffb74d;
+            --amber-soft: rgba(255, 183, 77, 0.12);
+            --text: #e2e0dc;
+            --text-secondary: #8886a0;
+            --text-muted: #4a4862;
+            --danger: #ff4757;
+            --success: #2ed573;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --radius-full: 9999px;
+        }
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        html { font-size: 16px; -webkit-font-smoothing: antialiased; }
+
+        body {
+            font-family: 'Noto Sans SC', 'DM Mono', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background:
+                radial-gradient(ellipse at 50% 30%, #0d1a25 0%, transparent 50%),
+                radial-gradient(ellipse at 20% 80%, #0d0a1a 0%, transparent 40%),
+                radial-gradient(ellipse at 80% 70%, #0a1515 0%, transparent 40%);
+            z-index: -1; pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: fixed; inset: 0;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 64 64' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: -1;
+        }
+
+        .hidden { display: none !important; }
+
+        .app {
+            max-width: 640px; margin: 0 auto; padding: 24px 20px;
+            min-height: 100vh; display: flex; flex-direction: column;
+        }
+
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 0; margin-bottom: 8px;
+        }
+        .logo {
+            font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.5rem;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header-actions { display: flex; gap: 8px; }
+
+        .icon-btn {
+            width: 40px; height: 40px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text-secondary); cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s ease; font-size: 1rem;
+        }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+        .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        .visualizer-section {
+            position: relative; display: flex; align-items: center;
+            justify-content: center; padding: 32px 0 8px; flex-shrink: 0;
+        }
+        .visualizer-canvas {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); pointer-events: none;
+        }
+
+        .mic-btn {
+            position: relative; width: 96px; height: 96px; border-radius: 50%;
+            border: 2px solid var(--border); background: var(--surface);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            z-index: 2; transition: all 0.3s ease; outline: none;
+        }
+        .mic-btn::before {
+            content: ''; position: absolute; inset: -8px; border-radius: 50%;
+            border: 1px solid var(--border); opacity: 0.3;
+            animation: breathe 3s ease-in-out infinite;
+        }
+        .mic-btn::after {
+            content: ''; position: absolute; inset: -18px; border-radius: 50%;
+            border: 1px solid var(--border); opacity: 0.15;
+            animation: breathe 3s ease-in-out infinite 0.6s;
+        }
+        @keyframes breathe {
+            0%, 100% { opacity: 0.15; }
+            50% { opacity: 0.35; }
+        }
+        .mic-btn svg { width: 32px; height: 32px; fill: var(--text-secondary); transition: fill 0.3s; }
+        .mic-btn:hover { border-color: var(--accent); box-shadow: 0 0 30px var(--accent-glow); }
+        .mic-btn:hover svg { fill: var(--accent); }
+
+        .mic-btn.listening {
+            border-color: var(--accent); background: var(--accent-soft);
+            box-shadow: 0 0 40px var(--accent-glow), inset 0 0 20px var(--accent-soft);
+        }
+        .mic-btn.listening svg { fill: var(--accent); }
+        .mic-btn.listening::before, .mic-btn.listening::after { border-color: var(--accent); animation: none; opacity: 0.25; }
+
+        .mic-btn.speaking { border-color: var(--purple); background: var(--purple-soft); box-shadow: 0 0 40px rgba(124,92,252,0.2); }
+        .mic-btn.speaking svg { fill: var(--purple); }
+
+        .mic-btn.rec-mic { border-color: var(--danger); background: rgba(255,71,87,0.08); box-shadow: 0 0 30px rgba(255,71,87,0.15); }
+        .mic-btn.rec-mic svg { fill: var(--danger); }
+        .mic-btn.rec-mic::before, .mic-btn.rec-mic::after { border-color: var(--danger); animation: none; opacity: 0.2; }
+
+        .mic-btn.translate-mic { border-color: var(--amber); background: var(--amber-soft); box-shadow: 0 0 30px rgba(255,183,77,0.15); }
+        .mic-btn.translate-mic svg { fill: var(--amber); }
+
+        .status {
+            text-align: center; margin-top: 16px;
+            font-family: 'DM Mono', monospace; font-size: 0.78rem;
+            color: var(--text-muted); letter-spacing: 0.08em;
+            text-transform: uppercase; min-height: 1.4em; transition: color 0.3s;
+        }
+        .status.active { color: var(--accent); }
+        .status.recording { color: var(--danger); }
+        .status.translating { color: var(--amber); }
+
+        .controls { display: flex; justify-content: center; gap: 10px; margin: 20px 0 12px; }
+        .control-btn {
+            padding: 8px 20px; border-radius: var(--radius-full);
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text-secondary); font-family: 'DM Mono', monospace;
+            font-size: 0.72rem; letter-spacing: 0.06em; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        }
+        .control-btn svg { width: 14px; height: 14px; fill: currentColor; }
+        .control-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .control-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+        .control-btn.translate-active { background: var(--amber-soft); border-color: var(--amber); color: var(--amber); }
+
+        .recording-bar {
+            display: none; align-items: center; gap: 12px;
+            padding: 12px 16px; border-radius: var(--radius-sm);
+            background: var(--surface-raised); border: 1px solid var(--border); margin: 8px 0;
+        }
+        .recording-bar.visible { display: flex; }
+        .recording-time { font-family: 'DM Mono', monospace; font-size: 0.85rem; color: var(--danger); min-width: 48px; }
+        .audio-player { flex: 1; height: 32px; border-radius: 8px; }
+        .download-btn {
+            padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+            background: none; color: var(--text-secondary); font-family: 'DM Mono', monospace;
+            font-size: 0.7rem; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .download-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+        .chat-section { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+        .chat-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 0; border-top: 1px solid var(--border);
+        }
+        .chat-title {
+            font-family: 'DM Mono', monospace; font-size: 0.68rem;
+            letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted);
+        }
+        .chat-clear {
+            font-family: 'DM Mono', monospace; font-size: 0.68rem;
+            color: var(--text-muted); background: none; border: none;
+            cursor: pointer; letter-spacing: 0.05em; transition: color 0.2s;
+        }
+        .chat-clear:hover { color: var(--danger); }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 12px 0;
+            display: flex; flex-direction: column; gap: 12px; max-height: 380px;
+            contain: content;
+        }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-track { background: transparent; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .message { display: flex; flex-direction: column; gap: 4px; animation: msgIn 0.3s ease; contain: layout style; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .message-meta { font-family: 'DM Mono', monospace; font-size: 0.62rem; color: var(--text-muted); letter-spacing: 0.04em; }
+        .message.user .message-meta { text-align: right; }
+
+        .message-bubble {
+            padding: 12px 16px; border-radius: var(--radius); max-width: 85%;
+            font-size: 0.88rem; line-height: 1.65; word-break: break-word;
+        }
+        .message.user .message-bubble {
+            background: var(--surface-raised); border: 1px solid var(--border);
+            align-self: flex-end; border-bottom-right-radius: 4px;
+        }
+        .message.assistant .message-bubble {
+            background: var(--accent-soft); border: 1px solid rgba(0,219,181,0.08);
+            align-self: flex-start; border-bottom-left-radius: 4px;
+        }
+
+        .empty-state { text-align: center; padding: 32px 20px; color: var(--text-muted); }
+        .empty-state svg { width: 40px; height: 40px; fill: var(--text-muted); opacity: 0.3; margin-bottom: 12px; }
+        .empty-state-text {
+            font-family: 'DM Mono', monospace; font-size: 0.78rem;
+            letter-spacing: 0.04em; line-height: 1.8;
+        }
+
+        .translation-section { flex: 1; display: flex; flex-direction: column; min-height: 0; gap: 14px; }
+
+        .translation-lang-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 0; border-top: 1px solid var(--border);
+        }
+        .translation-lang-select {
+            flex: 1; padding: 10px 14px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text); font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.82rem; outline: none; cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
+        }
+        .translation-lang-select:focus { border-color: var(--amber); }
+
+        .swap-btn {
+            width: 36px; height: 36px; border-radius: 50%;
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--amber); cursor: pointer; font-size: 1rem;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s ease; flex-shrink: 0;
+        }
+        .swap-btn:hover { border-color: var(--amber); background: var(--amber-soft); transform: rotate(180deg); }
+
+        .translation-areas { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
+
+        .translation-card {
+            padding: 16px; border-radius: var(--radius);
+            border: 1px solid var(--border); min-height: 80px;
+            animation: msgIn 0.3s ease; contain: layout style;
+        }
+        .translation-card.source-card { background: var(--surface-raised); }
+        .translation-card.target-card { background: var(--amber-soft); border-color: rgba(255,183,77,0.1); }
+
+        .translation-card-header {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+        }
+        .translation-card-label {
+            font-family: 'DM Mono', monospace; font-size: 0.62rem;
+            letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted);
+        }
+        .translation-card-text {
+            font-size: 1rem; line-height: 1.7; color: var(--text); word-break: break-word; min-height: 1.7em;
+        }
+        .translation-card-text.placeholder { color: var(--text-muted); font-style: italic; font-size: 0.85rem; }
+
+        .translation-divider {
+            display: flex; align-items: center; gap: 12px;
+            color: var(--text-muted); font-family: 'DM Mono', monospace;
+            font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase;
+        }
+        .translation-divider::before, .translation-divider::after {
+            content: ''; flex: 1; height: 1px; background: var(--border);
+        }
+
+        .translation-history-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 0; border-top: 1px solid var(--border); margin-top: 4px;
+        }
+
+        .translation-history {
+            flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 8px 0;
+        }
+        .translation-history::-webkit-scrollbar { width: 4px; }
+        .translation-history::-webkit-scrollbar-track { background: transparent; }
+        .translation-history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .history-item {
+            padding: 12px 14px; border-radius: var(--radius-sm);
+            background: var(--surface-raised); border: 1px solid var(--border);
+            animation: msgIn 0.3s ease; contain: layout style;
+        }
+        .history-source {
+            font-size: 0.85rem; line-height: 1.5; color: var(--text); margin-bottom: 6px; word-break: break-word;
+        }
+        .history-target {
+            font-size: 0.85rem; line-height: 1.5; color: var(--amber); word-break: break-word;
+        }
+        .history-lang-tag {
+            font-family: 'DM Mono', monospace; font-size: 0.58rem;
+            letter-spacing: 0.05em; color: var(--text-muted);
+            background: var(--bg); padding: 2px 6px; border-radius: 4px;
+            margin-right: 6px; vertical-align: middle;
+        }
+        .history-meta {
+            font-family: 'DM Mono', monospace; font-size: 0.58rem;
+            color: var(--text-muted); margin-top: 6px; text-align: right;
+        }
+
+        .input-area {
+            display: flex; gap: 8px; padding: 14px 0 4px;
+            border-top: 1px solid var(--border); margin-top: auto;
+        }
+        .text-input {
+            flex: 1; padding: 12px 16px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text); font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.88rem; outline: none; transition: border-color 0.2s;
+        }
+        .text-input::placeholder { color: var(--text-muted); }
+        .text-input:focus { border-color: var(--accent); }
+
+        .send-btn {
+            width: 44px; height: 44px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--surface);
+            color: var(--text-secondary); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .send-btn svg { width: 18px; height: 18px; fill: currentColor; }
+        .send-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+        .settings-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            z-index: 100; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+        .settings-overlay.open { opacity: 1; visibility: visible; }
+
+        .settings-panel {
+            position: fixed; right: 0; top: 0; bottom: 0;
+            width: 360px; max-width: 90vw; background: var(--surface);
+            border-left: 1px solid var(--border); z-index: 101;
+            transform: translateX(100%); transition: transform 0.3s ease;
+            padding: 24px; overflow-y: auto;
+        }
+        .settings-panel.open { transform: translateX(0); }
+        .settings-panel::-webkit-scrollbar { width: 4px; }
+        .settings-panel::-webkit-scrollbar-track { background: transparent; }
+        .settings-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .settings-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+        .settings-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.15rem; }
+        .settings-close {
+            width: 32px; height: 32px; border-radius: 8px;
+            border: 1px solid var(--border); background: none;
+            color: var(--text-secondary); cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .settings-close:hover { color: var(--text); border-color: var(--text-secondary); }
+        .settings-close svg { width: 14px; height: 14px; fill: currentColor; }
+
+        .settings-group { margin-bottom: 22px; }
+        .settings-label {
+            font-family: 'DM Mono', monospace; font-size: 0.68rem;
+            letter-spacing: 0.08em; text-transform: uppercase;
+            color: var(--text-muted); margin-bottom: 8px; display: block;
+        }
+        .settings-input {
+            width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-family: 'DM Mono', monospace;
+            font-size: 0.82rem; outline: none; transition: border-color 0.2s;
+        }
+        .settings-input:focus { border-color: var(--accent); }
+
+        .settings-select {
+            width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.82rem; outline: none; cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
+        }
+
+        .settings-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+
+        .mode-toggle { display: flex; border-radius: var(--radius-sm); border: 1px solid var(--border); overflow: hidden; }
+        .mode-option {
+            flex: 1; padding: 10px; text-align: center;
+            font-family: 'DM Mono', monospace; font-size: 0.72rem;
+            letter-spacing: 0.05em; cursor: pointer; background: none;
+            border: none; color: var(--text-muted); transition: all 0.2s;
+        }
+        .mode-option.active { background: var(--accent-soft); color: var(--accent); }
+        .mode-option:not(:last-child) { border-right: 1px solid var(--border); }
+
+        .settings-textarea {
+            width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.82rem; outline: none; resize: vertical; min-height: 60px;
+            transition: border-color 0.2s; line-height: 1.5;
+        }
+        .settings-textarea:focus { border-color: var(--accent); }
+
+        .notification {
+            position: fixed; top: 20px; left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            padding: 12px 24px; border-radius: var(--radius-sm);
+            background: var(--surface-raised); border: 1px solid var(--border);
+            font-family: 'DM Mono', monospace; font-size: 0.8rem;
+            color: var(--text); z-index: 200;
+            transition: transform 0.3s ease; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            white-space: nowrap;
+        }
+        .notification.show { transform: translateX(-50%) translateY(0); }
+        .notification.error { border-color: rgba(255,71,87,0.3); color: var(--danger); }
+
+        @media (max-width: 480px) {
+            .app { padding: 16px; }
+            .mic-btn { width: 80px; height: 80px; }
+            .mic-btn svg { width: 28px; height: 28px; }
+            .message-bubble { max-width: 92%; }
+            .controls { gap: 6px; }
+            .control-btn { padding: 6px 14px; font-size: 0.65rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app">
+    <header class="header">
+        <div class="logo">VOX</div>
+        <div class="header-actions">
+            <button class="icon-btn" id="settingsBtn" title="设置" aria-label="设置">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.07 7.07 0 00.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.04 7.04 0 00-1.62-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.49.49 0 00-.59.22L2.74 8.87c-.12.2-.07.47.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6a3.6 3.6 0 110-7.2 3.6 3.6 0 010 7.2z"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <section class="visualizer-section">
+        <canvas id="vizCanvas" class="visualizer-canvas" width="300" height="300"></canvas>
+        <button class="mic-btn" id="micBtn" title="点击开始语音" aria-label="点击开始语音">
+            <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm-1-9a1 1 0 012 0v6a1 1 0 01-2 0V5z"/><path d="M17 11a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+        </button>
+    </section>
+
+    <div class="status" id="statusText">点击麦克风开始对话</div>
+
+    <div class="controls">
+        <button class="control-btn active" id="modeChat" data-mode="chat" title="对话模式" aria-label="对话模式">
+            <svg viewBox="0 0 24 24"><path d="M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2zm0 14H5.17L4 17.17V4h16v12z"/></svg>
+            对话
+        </button>
+        <button class="control-btn" id="modeRecord" data-mode="record" title="录音模式" aria-label="录音模式">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>
+            录音
+        </button>
+        <button class="control-btn" id="modeTranslate" data-mode="translate" title="翻译模式" aria-label="翻译模式">
+            <svg viewBox="0 0 24 24"><path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>
+            翻译
+        </button>
+    </div>
+
+    <div class="recording-bar" id="recordingBar">
+        <span class="recording-time" id="recordingTime">00:00</span>
+        <audio id="audioPlayer" class="audio-player" controls title="录音回放"></audio>
+        <button class="download-btn" id="downloadBtn" title="下载录音" aria-label="下载录音">下载</button>
+    </div>
+
+    <section class="chat-section" id="chatSection">
+        <div class="chat-header">
+            <span class="chat-title">对话记录</span>
+            <button class="chat-clear" id="clearBtn" title="清空对话" aria-label="清空对话">清空</button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="empty-state" id="emptyState">
+                <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm-1-9a1 1 0 012 0v6a1 1 0 01-2 0V5z"/><path d="M17 11a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg>
+                <div class="empty-state-text">
+                    点击上方麦克风开始语音对话<br>或在下方输入文字消息
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="translation-section hidden" id="translationSection">
+        <div class="translation-lang-row">
+            <select class="translation-lang-select" id="sourceLang" title="源语言" aria-label="源语言">
+                <option value="zh-CN" selected>中文</option>
+                <option value="en-US">English</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="ru-RU">Русский</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어</option>
+            </select>
+            <button class="swap-btn" id="swapLangBtn" title="交换语言" aria-label="交换语言">⇄</button>
+            <select class="translation-lang-select" id="targetLang" title="目标语言" aria-label="目标语言">
+                <option value="en-US" selected>English</option>
+                <option value="zh-CN">中文</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="ru-RU">Русский</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어</option>
+            </select>
+        </div>
+
+        <div class="translation-areas" id="translationAreas">
+            <div class="translation-card source-card">
+                <div class="translation-card-header">
+                    <span class="translation-card-label">原文</span>
+                </div>
+                <div class="translation-card-text placeholder" id="sourceText">点击麦克风说话或输入文字...</div>
+            </div>
+            <div class="translation-divider">翻译结果</div>
+            <div class="translation-card target-card">
+                <div class="translation-card-header">
+                    <span class="translation-card-label">译文</span>
+                </div>
+                <div class="translation-card-text placeholder" id="targetText">等待翻译...</div>
+            </div>
+        </div>
+
+        <div class="translation-history-header">
+            <span class="chat-title">翻译历史</span>
+            <button class="chat-clear" id="clearTranslationBtn" title="清空翻译历史" aria-label="清空翻译历史">清空</button>
+        </div>
+        <div class="translation-history" id="translationHistory"></div>
+    </section>
+
+    <div class="input-area">
+        <input type="text" class="text-input" id="textInput" placeholder="输入文字消息..." autocomplete="off" title="文字输入" aria-label="文字输入">
+        <button class="send-btn" id="sendBtn" title="发送" aria-label="发送">
+            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        </button>
+    </div>
+</div>
+
+<div class="settings-overlay" id="settingsOverlay"></div>
+<div class="settings-panel" id="settingsPanel">
+    <div class="settings-header">
+        <span class="settings-title">设置</span>
+        <button class="settings-close" id="settingsClose" title="关闭设置" aria-label="关闭设置">
+            <svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+        </button>
+    </div>
+
+    <div class="settings-group">
+        <label class="settings-label">响应模式</label>
+        <div class="mode-toggle" id="responseModeToggle" role="radiogroup" aria-label="响应模式">
+            <button class="mode-option active" data-value="local" title="本地模式" aria-label="本地模式">本地模式</button>
+            <button class="mode-option" data-value="api" title="API 模式" aria-label="API 模式">API 模式</button>
+        </div>
+        <div class="settings-hint">本地模式使用内置规则回复；API 模式接入大语言模型获得智能回复。</div>
+    </div>
+
+    <div class="settings-group hidden" id="apiSettings">
+        <label class="settings-label">API 地址</label>
+        <input type="text" class="settings-input" id="apiEndpoint" placeholder="https://api.openai.com/v1/chat/completions" title="API 地址" aria-label="API 地址">
+        <div class="settings-hint">支持 OpenAI 及其兼容接口（如本地 Ollama、通义千问等）。</div>
+    </div>
+
+    <div class="settings-group hidden" id="apiKeyGroup">
+        <label class="settings-label">API 密钥</label>
+        <input type="password" class="settings-input" id="apiKey" placeholder="sk-..." title="API 密钥" aria-label="API 密钥">
+    </div>
+
+    <div class="settings-group hidden" id="modelGroup">
+        <label class="settings-label">模型名称</label>
+        <input type="text" class="settings-input" id="modelName" placeholder="gpt-3.5-turbo" value="gpt-3.5-turbo" title="模型名称" aria-label="模型名称">
+    </div>
+
+    <div class="settings-group hidden" id="systemPromptGroup">
+        <label class="settings-label">系统提示词</label>
+        <textarea class="settings-textarea" id="systemPrompt" rows="3" placeholder="设定助手的角色和行为..." title="系统提示词" aria-label="系统提示词">你是一个友好的语音助手，用简洁明了的方式回答问题。回复尽量简短，适合语音播报。</textarea>
+    </div>
+
+    <div class="settings-group">
+        <label class="settings-label">识别语言</label>
+        <select class="settings-select" id="langSelect" title="识别语言" aria-label="识别语言">
+            <option value="zh-CN" selected>中文（普通话）</option>
+            <option value="en-US">English (US)</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="ru-RU">Русский</option>
+            <option value="ja-JP">日本語</option>
+            <option value="ko-KR">한국어</option>
+        </select>
+    </div>
+
+    <div class="settings-group">
+        <label class="settings-label">语音播报</label>
+        <div class="mode-toggle" id="ttsToggle" role="radiogroup" aria-label="语音播报">
+            <button class="mode-option active" data-value="on" title="开启语音播报" aria-label="开启">开启</button>
+            <button class="mode-option" data-value="off" title="关闭语音播报" aria-label="关闭">关闭</button>
+        </div>
+    </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  Constants — 7 Languages
+// ═══════════════════════════════════════════════
+
+const LANG_NAMES = {
+    'zh-CN': '中文', 'en-US': 'English', 'fr-FR': 'Français',
+    'de-DE': 'Deutsch', 'ru-RU': 'Русский', 'ja-JP': '日本語', 'ko-KR': '한국어'
+};
+
+const LANG_CODES = {
+    '中文': 'zh-CN', 'English': 'en-US', 'Français': 'fr-FR',
+    'Deutsch': 'de-DE', 'Русский': 'ru-RU', '日本語': 'ja-JP', '한국어': 'ko-KR'
+};
+
+const PHRASEBOOK = [
+    { 'zh-CN': '你好',       'en-US': 'Hello',            'fr-FR': 'Bonjour',            'de-DE': 'Hallo',                'ru-RU': 'Здравствуйте',      'ja-JP': 'こんにちは',       'ko-KR': '안녕하세요' },
+    { 'zh-CN': '你好吗',     'en-US': 'How are you',      'fr-FR': 'Comment allez-vous', 'de-DE': 'Wie geht es Ihnen',    'ru-RU': 'Как дела',          'ja-JP': 'お元気ですか',     'ko-KR': '어떻게 지내세요' },
+    { 'zh-CN': '谢谢',       'en-US': 'Thank you',        'fr-FR': 'Merci',              'de-DE': 'Danke',                'ru-RU': 'Спасибо',           'ja-JP': 'ありがとう',       'ko-KR': '감사합니다' },
+    { 'zh-CN': '不客气',     'en-US': 'You\'re welcome',  'fr-FR': 'De rien',            'de-DE': 'Bitte',                'ru-RU': 'Пожалуйста',        'ja-JP': 'どういたしまして', 'ko-KR': '천만에요' },
+    { 'zh-CN': '对不起',     'en-US': 'Sorry',            'fr-FR': 'Pardon',             'de-DE': 'Entschuldigung',       'ru-RU': 'Извините',          'ja-JP': 'すみません',       'ko-KR': '죄송합니다' },
+    { 'zh-CN': '再见',       'en-US': 'Goodbye',          'fr-FR': 'Au revoir',          'de-DE': 'Auf Wiedersehen',      'ru-RU': 'До свидания',       'ja-JP': 'さようなら',       'ko-KR': '안녕히 가세요' },
+    { 'zh-CN': '请',         'en-US': 'Please',           'fr-FR': 'S\'il vous plaît',   'de-DE': 'Bitte',                'ru-RU': 'Пожалуйста',        'ja-JP': 'お願いします',     'ko-KR': '부디' },
+    { 'zh-CN': '是',         'en-US': 'Yes',              'fr-FR': 'Oui',                'de-DE': 'Ja',                   'ru-RU': 'Да',                'ja-JP': 'はい',             'ko-KR': '네' },
+    { 'zh-CN': '不是',       'en-US': 'No',               'fr-FR': 'Non',                'de-DE': 'Nein',                 'ru-RU': 'Нет',               'ja-JP': 'いいえ',           'ko-KR': '아니요' },
+    { 'zh-CN': '早上好',     'en-US': 'Good morning',     'fr-FR': 'Bonjour',            'de-DE': 'Guten Morgen',         'ru-RU': 'Доброе утро',       'ja-JP': 'おはようございます', 'ko-KR': '좋은 아침이에요' },
+    { 'zh-CN': '晚上好',     'en-US': 'Good evening',     'fr-FR': 'Bonsoir',            'de-DE': 'Guten Abend',          'ru-RU': 'Добрый вечер',      'ja-JP': 'こんばんは',       'ko-KR': '좋은 저녁이에요' },
+    { 'zh-CN': '我',         'en-US': 'I',                'fr-FR': 'Je',                 'de-DE': 'Ich',                  'ru-RU': 'Я',                 'ja-JP': '私',               'ko-KR': '나' },
+    { 'zh-CN': '你',         'en-US': 'You',              'fr-FR': 'Vous',               'de-DE': 'Sie',                  'ru-RU': 'Вы',                'ja-JP': 'あなた',           'ko-KR': '당신' },
+    { 'zh-CN': '好的',       'en-US': 'Okay',             'fr-FR': 'D\'accord',          'de-DE': 'In Ordnung',           'ru-RU': 'Хорошо',            'ja-JP': 'わかりました',     'ko-KR': '알겠습니다' },
+    { 'zh-CN': '多少钱',     'en-US': 'How much',         'fr-FR': 'Combien',            'de-DE': 'Wie viel',             'ru-RU': 'Сколько стоит',     'ja-JP': 'いくらですか',     'ko-KR': '얼마예요' },
+    { 'zh-CN': '我不明白',   'en-US': 'I don\'t understand', 'fr-FR': 'Je ne comprends pas', 'de-DE': 'Ich verstehe nicht', 'ru-RU': 'Я не понимаю',  'ja-JP': 'わかりません',     'ko-KR': '이해가 안 됩니다' },
+    { 'zh-CN': '我爱你',     'en-US': 'I love you',       'fr-FR': 'Je t\'aime',         'de-DE': 'Ich liebe dich',       'ru-RU': 'Я тебя люблю',      'ja-JP': '愛しています',     'ko-KR': '사랑해요' },
+    { 'zh-CN': '今天天气很好', 'en-US': 'The weather is nice today', 'fr-FR': 'Il fait beau aujourd\'hui', 'de-DE': 'Das Wetter ist heute schön', 'ru-RU': 'Сегодня хорошая погода', 'ja-JP': '今日はいい天気です', 'ko-KR': '오늘 날씨가 좋아요' },
+    { 'zh-CN': '你是谁',     'en-US': 'Who are you',      'fr-FR': 'Qui êtes-vous',      'de-DE': 'Wer sind Sie',         'ru-RU': 'Кто вы',            'ja-JP': 'あなたは誰ですか', 'ko-KR': '당신은 누구예요' },
+    { 'zh-CN': '我很高兴认识你', 'en-US': 'Nice to meet you', 'fr-FR': 'Enchanté',       'de-DE': 'Freut mich',           'ru-RU': 'Приятно познакомиться', 'ja-JP': 'はじめまして', 'ko-KR': '만나서 반가워요' },
+    { 'zh-CN': '祝你有美好的一天', 'en-US': 'Have a nice day', 'fr-FR': 'Bonne journée', 'de-DE': 'Einen schönen Tag',    'ru-RU': 'Хорошего дня',      'ja-JP': '良い一日を',       'ko-KR': '좋은 하루 보내세요' },
+    { 'zh-CN': '请问洗手间在哪里', 'en-US': 'Where is the restroom', 'fr-FR': 'Où sont les toilettes', 'de-DE': 'Wo ist die Toilette', 'ru-RU': 'Где туалет', 'ja-JP': 'トイレはどこですか', 'ko-KR': '화장실이 어디에요' },
+    { 'zh-CN': '这个多少钱', 'en-US': 'How much is this', 'fr-FR': 'Combien ça coûte',   'de-DE': 'Wie viel kostet das',  'ru-RU': 'Сколько это стоит', 'ja-JP': 'これはいくらですか', 'ko-KR': '이거 얼마예요' },
+    { 'zh-CN': '我需要帮助', 'en-US': 'I need help',      'fr-FR': 'J\'ai besoin d\'aide', 'de-DE': 'Ich brauche Hilfe',  'ru-RU': 'Мне нужна помощь', 'ja-JP': '助けが必要です',   'ko-KR': '도움이 필요합니다' },
+    { 'zh-CN': '我会说法语', 'en-US': 'I can speak French', 'fr-FR': 'Je parle français', 'de-DE': 'Ich spreche Französisch', 'ru-RU': 'Я говорю по-французски', 'ja-JP': 'フランス語が話せます', 'ko-KR': '프랑스어를 할 수 있어요' },
+    { 'zh-CN': '我会说德语', 'en-US': 'I can speak German', 'fr-FR': 'Je parle allemand', 'de-DE': 'Ich spreche Deutsch',  'ru-RU': 'Я говорю по-немецки', 'ja-JP': 'ドイツ語が話せます', 'ko-KR': '독일어를 할 수 있어요' },
+    { 'zh-CN': '我会说俄语', 'en-US': 'I can speak Russian', 'fr-FR': 'Je parle russe',  'de-DE': 'Ich spreche Russisch', 'ru-RU': 'Я говорю по-русски', 'ja-JP': 'ロシア語が話せます', 'ko-KR': '러시아어를 할 수 있어요' },
+];
+
+// ═══════════════════════════════════════════════
+//  VoiceApp Class
+// ═══════════════════════════════════════════════
+
+class VoiceApp {
+    constructor() {
+        this.state = 'idle';
+        this.mode = 'chat';
+        this.chatHistory = [];
+        this.translationHistoryData = [];
+
+        this.settings = {
+            responseMode: 'local',
+            apiEndpoint: 'https://api.openai.com/v1/chat/completions',
+            apiKey: '',
+            model: 'gpt-3.5-turbo',
+            systemPrompt: '你是一个友好的语音助手，用简洁明了的方式回答问题。回复尽量简短，适合语音播报。',
+            language: 'zh-CN',
+            ttsEnabled: true,
+        };
+
+        this.audioContext = null;
+        this.analyser = null;
+        this.mediaStream = null;
+        this.mediaRecorder = null;
+        this.recordedChunks = [];
+        this.recordedBlob = null;
+        this.recordingTimer = null;
+        this.recordingSeconds = 0;
+
+        this.recognition = null;
+        this.synthesis = window.speechSynthesis;
+        this.recognitionSupported = false;
+
+        this.vizAnimId = null;
+        this.idleAnimId = null;
+
+        this.init();
+    }
+
+    init() {
+        this.cacheDOM();
+        this.loadSettings();
+        this.setupSpeechRecognition();
+        this.bindEvents();
+        this.startIdleAnimation();
+        this.applySettingsToUI();
+        this.setupVisibilityHandler();
+    }
+
+    cacheDOM() {
+        this.el = {
+            micBtn:          document.getElementById('micBtn'),
+            canvas:          document.getElementById('vizCanvas'),
+            statusText:      document.getElementById('statusText'),
+            chatSection:     document.getElementById('chatSection'),
+            chatMessages:    document.getElementById('chatMessages'),
+            emptyState:      document.getElementById('emptyState'),
+            textInput:       document.getElementById('textInput'),
+            sendBtn:         document.getElementById('sendBtn'),
+            clearBtn:        document.getElementById('clearBtn'),
+            modeChat:        document.getElementById('modeChat'),
+            modeRecord:      document.getElementById('modeRecord'),
+            modeTranslate:   document.getElementById('modeTranslate'),
+            recordingBar:    document.getElementById('recordingBar'),
+            recordingTime:   document.getElementById('recordingTime'),
+            audioPlayer:     document.getElementById('audioPlayer'),
+            downloadBtn:     document.getElementById('downloadBtn'),
+            settingsBtn:     document.getElementById('settingsBtn'),
+            settingsOverlay: document.getElementById('settingsOverlay'),
+            settingsPanel:   document.getElementById('settingsPanel'),
+            settingsClose:   document.getElementById('settingsClose'),
+            notification:    document.getElementById('notification'),
+            responseModeToggle: document.getElementById('responseModeToggle'),
+            apiEndpoint:     document.getElementById('apiEndpoint'),
+            apiKey:          document.getElementById('apiKey'),
+            modelName:       document.getElementById('modelName'),
+            systemPrompt:    document.getElementById('systemPrompt'),
+            langSelect:      document.getElementById('langSelect'),
+            ttsToggle:       document.getElementById('ttsToggle'),
+            apiSettings:     document.getElementById('apiSettings'),
+            apiKeyGroup:     document.getElementById('apiKeyGroup'),
+            modelGroup:      document.getElementById('modelGroup'),
+            systemPromptGroup: document.getElementById('systemPromptGroup'),
+            translationSection:   document.getElementById('translationSection'),
+            sourceLang:           document.getElementById('sourceLang'),
+            targetLang:           document.getElementById('targetLang'),
+            swapLangBtn:          document.getElementById('swapLangBtn'),
+            sourceText:           document.getElementById('sourceText'),
+            targetText:           document.getElementById('targetText'),
+            translationHistory:   document.getElementById('translationHistory'),
+            clearTranslationBtn:  document.getElementById('clearTranslationBtn'),
+        };
+        this.ctx = this.el.canvas.getContext('2d');
+    }
+
+    setupVisibilityHandler() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopIdleAnimation();
+                this.stopVisualization();
+            } else if (this.state === 'idle') {
+                this.startIdleAnimation();
+            }
+        });
+    }
+
+    // ── Speech Recognition ──
+
+    setupSpeechRecognition() {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) { this.recognitionSupported = false; return; }
+        this.recognitionSupported = true;
+        this.recognition = new SR();
+        this.recognition.continuous = false;
+        this.recognition.interimResults = true;
+        this.recognition.lang = this.settings.language;
+
+        this.recognition.onresult = (event) => {
+            let interim = '', final = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                const t = event.results[i][0].transcript;
+                if (event.results[i].isFinal) final += t;
+                else interim += t;
+            }
+            if (interim) this.setStatus(`正在识别: ${interim}`, this.mode === 'translate' ? 'translating' : 'active');
+            if (final) this.onSpeechResult(final.trim());
+        };
+
+        this.recognition.onend = () => {
+            if (this.state === 'listening') this.stopListening();
+        };
+
+        this.recognition.onerror = (e) => {
+            if (e.error === 'no-speech') this.notify('未检测到语音，请重试');
+            else if (e.error === 'not-allowed') this.notify('麦克风权限被拒绝，请在浏览器设置中允许', 'error');
+            else if (e.error !== 'aborted') this.notify(`语音识别错误: ${e.error}`, 'error');
+            this.stopListening();
+        };
+    }
+
+    async ensureAudioContext() {
+        if (this.audioContext) return;
+        try {
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.analyser = this.audioContext.createAnalyser();
+            this.analyser.fftSize = 256;
+            this.analyser.smoothingTimeConstant = 0.8;
+            const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+            source.connect(this.analyser);
+        } catch (err) {
+            this.notify('无法访问麦克风: ' + err.message, 'error');
+            throw err;
+        }
+    }
+
+    // ── Events ──
+
+    bindEvents() {
+        this.el.micBtn.addEventListener('click', () => this.toggleMic());
+        this.el.textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendTextMessage(); }
+        });
+        this.el.sendBtn.addEventListener('click', () => this.sendTextMessage());
+        this.el.clearBtn.addEventListener('click', () => this.clearChat());
+        this.el.modeChat.addEventListener('click', () => this.setMode('chat'));
+        this.el.modeRecord.addEventListener('click', () => this.setMode('record'));
+        this.el.modeTranslate.addEventListener('click', () => this.setMode('translate'));
+        this.el.downloadBtn.addEventListener('click', () => this.downloadRecording());
+        this.el.settingsBtn.addEventListener('click', () => this.openSettings());
+        this.el.settingsOverlay.addEventListener('click', () => this.closeSettings());
+        this.el.settingsClose.addEventListener('click', () => this.closeSettings());
+
+        this.el.responseModeToggle.querySelectorAll('.mode-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.settings.responseMode = btn.dataset.value;
+                this.updateResponseModeUI();
+                this.saveSettings();
+            });
+        });
+
+        this.el.ttsToggle.querySelectorAll('.mode-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.settings.ttsEnabled = btn.dataset.value === 'on';
+                this.updateToggleUI(this.el.ttsToggle, this.settings.ttsEnabled ? 'on' : 'off');
+                this.saveSettings();
+            });
+        });
+
+        ['apiEndpoint', 'apiKey', 'modelName', 'systemPrompt', 'langSelect'].forEach(id => {
+            this.el[id].addEventListener('change', () => {
+                this.settings[id === 'langSelect' ? 'language' : id] = this.el[id].value;
+                if (id === 'langSelect' && this.recognition) this.recognition.lang = this.settings.language;
+                this.saveSettings();
+            });
+        });
+
+        this.el.swapLangBtn.addEventListener('click', () => this.swapLanguages());
+        this.el.clearTranslationBtn.addEventListener('click', () => this.clearTranslationHistory());
+        this.el.sourceLang.addEventListener('change', () => this.saveTranslationSettings());
+        this.el.targetLang.addEventListener('change', () => this.saveTranslationSettings());
+    }
+
+    // ── Mode ──
+
+    setMode(mode) {
+        if (this.state === 'listening' || this.state === 'recording') this.stopAll();
+        this.mode = mode;
+        this.el.modeChat.classList.toggle('active', mode === 'chat');
+        this.el.modeRecord.classList.toggle('active', mode === 'record');
+        this.el.modeTranslate.classList.toggle('translate-active', mode === 'translate');
+        this.el.modeTranslate.classList.toggle('active', mode === 'translate');
+        this.el.chatSection.classList.toggle('hidden', mode === 'translate');
+        this.el.translationSection.classList.toggle('hidden', mode !== 'translate');
+        this.el.recordingBar.classList.remove('visible');
+
+        if (mode === 'chat') {
+            this.setStatus('点击麦克风开始对话');
+            this.el.textInput.placeholder = '输入文字消息...';
+        } else if (mode === 'record') {
+            this.setStatus('点击麦克风开始录音');
+            this.el.textInput.placeholder = '输入文字消息...';
+        } else {
+            this.setStatus('点击麦克风开始翻译');
+            this.el.textInput.placeholder = '输入文字进行翻译...';
+        }
+    }
+
+    // ── Mic ──
+
+    async toggleMic() {
+        if (this.state === 'listening' || this.state === 'recording') { this.stopAll(); return; }
+        if (this.state === 'processing' || this.state === 'speaking') return;
+        try { await this.ensureAudioContext(); } catch { return; }
+        if (this.mode === 'record') this.startRecording();
+        else this.startListening();
+    }
+
+    stopAll() {
+        if (this.state === 'listening') this.stopListening();
+        else if (this.state === 'recording') this.stopRecording();
+        else if (this.state === 'speaking') { this.synthesis.cancel(); this.setState('idle'); }
+    }
+
+    startListening() {
+        if (!this.recognitionSupported) { this.notify('当前浏览器不支持语音识别，请使用 Chrome / Edge', 'error'); return; }
+        this.synthesis.cancel();
+        this.recognition.lang = this.mode === 'translate' ? this.el.sourceLang.value : this.settings.language;
+        try { this.recognition.start(); } catch { return; }
+        this.setState('listening');
+        const cls = this.mode === 'translate' ? 'translating' : 'active';
+        this.setStatus(this.mode === 'translate' ? '正在聆听（翻译模式）...' : '正在聆听...', cls);
+        this.el.micBtn.classList.toggle('translate-mic', this.mode === 'translate');
+        this.stopIdleAnimation();
+        this.drawActiveVisualization();
+    }
+
+    stopListening() {
+        try { this.recognition.stop(); } catch {}
+        if (this.state === 'listening') {
+            this.setState('idle');
+            this.el.micBtn.classList.remove('translate-mic');
+            this.setStatus(this.mode === 'translate' ? '点击麦克风开始翻译' : '点击麦克风开始对话');
+            this.stopVisualization();
+            this.startIdleAnimation();
+        }
+    }
+
+    onSpeechResult(text) {
+        if (!text) return;
+        this.stopVisualization();
+        if (this.mode === 'translate') {
+            this.handleTranslationInput(text);
+        } else {
+            this.addMessage('user', text);
+            this.processInput(text);
+        }
+    }
+
+    // ── Recording ──
+
+    startRecording() {
+        this.recordedChunks = [];
+        this.recordingSeconds = 0;
+        this.mediaRecorder = new MediaRecorder(this.mediaStream);
+        this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
+        this.mediaRecorder.onstop = () => {
+            this.recordedBlob = new Blob(this.recordedChunks, { type: 'audio/webm' });
+            this.el.audioPlayer.src = URL.createObjectURL(this.recordedBlob);
+            this.el.recordingBar.classList.add('visible');
+            clearInterval(this.recordingTimer);
+        };
+        this.mediaRecorder.start(100);
+        this.setState('recording');
+        this.setStatus('录音中...', 'recording');
+        this.el.micBtn.classList.add('rec-mic');
+        this.el.recordingBar.classList.remove('visible');
+        this.stopIdleAnimation();
+        this.drawActiveVisualization();
+        this.recordingTimer = setInterval(() => {
+            this.recordingSeconds++;
+            const m = String(Math.floor(this.recordingSeconds / 60)).padStart(2, '0');
+            const s = String(this.recordingSeconds % 60).padStart(2, '0');
+            this.el.recordingTime.textContent = `${m}:${s}`;
+        }, 1000);
+    }
+
+    stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
+        this.el.micBtn.classList.remove('rec-mic');
+        this.setState('idle');
+        this.setStatus('录音完成，可回放或下载');
+        this.stopVisualization();
+        this.startIdleAnimation();
+    }
+
+    downloadRecording() {
+        if (!this.recordedBlob) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(this.recordedBlob);
+        a.download = `vox-recording-${Date.now()}.webm`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        this.notify('录音已下载');
+    }
+
+    // ── Translation ──
+
+    swapLanguages() {
+        const src = this.el.sourceLang.value;
+        const tgt = this.el.targetLang.value;
+        this.el.sourceLang.value = tgt;
+        this.el.targetLang.value = src;
+        this.saveTranslationSettings();
+    }
+
+    saveTranslationSettings() {
+        try {
+            localStorage.setItem('vox-translation', JSON.stringify({
+                source: this.el.sourceLang.value,
+                target: this.el.targetLang.value,
+            }));
+        } catch {}
+    }
+
+    loadTranslationSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('vox-translation'));
+            if (saved) {
+                if (saved.source) this.el.sourceLang.value = saved.source;
+                if (saved.target) this.el.targetLang.value = saved.target;
+            }
+        } catch {}
+    }
+
+    async handleTranslationInput(text) {
+        const fromLang = this.el.sourceLang.value;
+        const toLang = this.el.targetLang.value;
+
+        this.el.sourceText.textContent = text;
+        this.el.sourceText.classList.remove('placeholder');
+        this.el.targetText.textContent = '正在翻译...';
+        this.el.targetText.classList.add('placeholder');
+
+        this.setState('processing');
+        this.setStatus('正在翻译...', 'translating');
+
+        let translated;
+        try {
+            if (this.settings.responseMode === 'api' && this.settings.apiKey) {
+                translated = await this.getAPITranslation(text, fromLang, toLang);
+            } else {
+                await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
+                translated = this.getLocalTranslation(text, fromLang, toLang);
+            }
+        } catch (err) {
+            translated = `翻译出错: ${err.message}`;
+            this.notify('翻译请求失败', 'error');
+        }
+
+        this.el.targetText.textContent = translated;
+        this.el.targetText.classList.remove('placeholder');
+        this.addTranslationToHistory(text, translated, fromLang, toLang);
+
+        if (this.settings.ttsEnabled) {
+            this.speakTranslated(translated, toLang);
+        } else {
+            this.setState('idle');
+            this.setStatus('点击麦克风开始翻译');
+        }
+    }
+
+    async getAPITranslation(text, fromLang, toLang) {
+        const fromName = LANG_NAMES[fromLang] || fromLang;
+        const toName = LANG_NAMES[toLang] || toLang;
+
+        const resp = await fetch(this.settings.apiEndpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${this.settings.apiKey}`,
+            },
+            body: JSON.stringify({
+                model: this.settings.model,
+                messages: [
+                    { role: 'system', content: '你是一个专业的翻译助手。只输出翻译结果，不添加任何解释、注释或额外文字。' },
+                    { role: 'user', content: `将以下${fromName}文本翻译成${toName}：\n${text}` }
+                ],
+                max_tokens: 300,
+                temperature: 0.2,
+            }),
+        });
+
+        if (!resp.ok) {
+            const errBody = await resp.text();
+            throw new Error(`HTTP ${resp.status}: ${errBody.slice(0, 100)}`);
+        }
+
+        const data = await resp.json();
+        return data.choices?.[0]?.message?.content?.trim() || '翻译失败';
+    }
+
+    getLocalTranslation(text, fromLang, toLang) {
+        const trimmed = text.trim();
+
+        for (const entry of PHRASEBOOK) {
+            if (entry[fromLang] && entry[fromLang] === trimmed) {
+                return entry[toLang] || trimmed;
+            }
+        }
+
+        for (const entry of PHRASEBOOK) {
+            if (entry[fromLang] && entry[fromLang].toLowerCase() === trimmed.toLowerCase()) {
+                return entry[toLang] || trimmed;
+            }
+        }
+
+        for (const entry of PHRASEBOOK) {
+            const src = entry[fromLang];
+            if (src && trimmed.includes(src)) {
+                return entry[toLang] || trimmed;
+            }
+        }
+
+        return `[本地模式] 无法翻译「${trimmed}」。接入 API 模式可获得更准确的翻译。`;
+    }
+
+    speakTranslated(text, lang) {
+        this.synthesis.cancel();
+        const cleaned = text.replace(/[「」『』""''《》【】\[\]]/g, '');
+        const utterance = new SpeechSynthesisUtterance(cleaned);
+        utterance.lang = lang;
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        const voices = this.synthesis.getVoices();
+        const langPrefix = lang.split('-')[0];
+        const match = voices.find(v => v.lang.startsWith(langPrefix) && v.localService);
+        if (match) utterance.voice = match;
+
+        utterance.onstart = () => {
+            this.setState('speaking');
+            this.setStatus('正在朗读译文...', 'active');
+            this.el.micBtn.classList.add('speaking');
+        };
+
+        const onEnd = () => {
+            this.el.micBtn.classList.remove('speaking');
+            this.setState('idle');
+            this.setStatus(this.mode === 'translate' ? '点击麦克风开始翻译' : '点击麦克风开始对话');
+        };
+        utterance.onend = onEnd;
+        utterance.onerror = onEnd;
+        this.synthesis.speak(utterance);
+    }
+
+    addTranslationToHistory(source, translated, fromLang, toLang) {
+        this.translationHistoryData.push({ source, translated, fromLang, toLang, time: new Date() });
+
+        const item = document.createElement('div');
+        item.className = 'history-item';
+
+        const srcDiv = document.createElement('div');
+        srcDiv.className = 'history-source';
+        srcDiv.innerHTML = `<span class="history-lang-tag">${LANG_NAMES[fromLang] || fromLang}</span>${this.escapeHtml(source)}`;
+
+        const tgtDiv = document.createElement('div');
+        tgtDiv.className = 'history-target';
+        tgtDiv.innerHTML = `<span class="history-lang-tag">${LANG_NAMES[toLang] || toLang}</span>${this.escapeHtml(translated)}`;
+
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'history-meta';
+        metaDiv.textContent = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        item.appendChild(srcDiv);
+        item.appendChild(tgtDiv);
+        item.appendChild(metaDiv);
+        this.el.translationHistory.appendChild(item);
+        this.el.translationHistory.scrollTop = this.el.translationHistory.scrollHeight;
+    }
+
+    clearTranslationHistory() {
+        this.translationHistoryData = [];
+        this.el.translationHistory.innerHTML = '';
+        this.el.sourceText.textContent = '点击麦克风说话或输入文字...';
+        this.el.sourceText.classList.add('placeholder');
+        this.el.targetText.textContent = '等待翻译...';
+        this.el.targetText.classList.add('placeholder');
+    }
+
+    escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Chat Input Processing ──
+
+    async processInput(text) {
+        this.setState('processing');
+        this.setStatus('正在思考...');
+
+        let response;
+        try {
+            if (this.settings.responseMode === 'api' && this.settings.apiKey) {
+                response = await this.getAPIResponse(text);
+            } else {
+                await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+                response = this.getLocalResponse(text);
+            }
+        } catch (err) {
+            response = `请求出错: ${err.message}`;
+            this.notify('API 请求失败', 'error');
+        }
+
+        this.addMessage('assistant', response);
+
+        if (this.settings.ttsEnabled) {
+            this.speak(response);
+        } else {
+            this.setState('idle');
+            this.setStatus('点击麦克风开始对话');
+        }
+    }
+
+    sendTextMessage() {
+        const text = this.el.textInput.value.trim();
+        if (!text) return;
+        this.el.textInput.value = '';
+        if (this.mode === 'translate') {
+            this.handleTranslationInput(text);
+        } else {
+            this.addMessage('user', text);
+            this.processInput(text);
+        }
+    }
+
+    // ── Response Engines ──
+
+    getLocalResponse(text) {
+        const t = text.toLowerCase().trim();
+        if (/^(你好|嗨|哈喽|hello|hi|hey|您好|bonjour|bonsoir|salut|hallo|guten|привет|здравствуйте)/.test(t))
+            return this.pick([
+                '你好！很高兴和你交流，有什么可以帮助你的吗？',
+                '嗨！我在这里，随时为你服务。',
+                '你好呀！今天想聊些什么？'
+            ]);
+        if (/时间|几点|今天.*号|日期|quelle heure|который час|wie spät|welche zeit|what time/.test(t))
+            return `现在是 ${new Date().toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        if (/天气|气温|下雨|温度|météo|погода|wetter|weather/.test(t))
+            return '我暂时没有接入天气数据，建议你查看天气应用获取最新预报。';
+        if (/你是谁|你叫什么|自我介绍|你是什么|qui êtes|qui es-tu|кто ты|wer bist|who are you/.test(t))
+            return '我是一个运行在浏览器中的语音交互助手。我支持中文、英文、法文、德文、俄文、日文和韩文。在设置中接入 API 后，我能给出更智能的回复。';
+        if (/谢谢|感谢|thanks|thank you|merci|danke|спасибо/.test(t))
+            return this.pick(['不客气！随时可以问我。', '很高兴能帮到你！', '不用谢，有需要随时找我。']);
+        if (/笑话|讲个|逗我|开心|blague|witz|анекдот|joke/.test(t))
+            return this.pick([
+                '为什么程序员总分不清万圣节和圣诞节？因为 Oct 31 等于 Dec 25。',
+                '一只蜗牛爬上了苹果树，树上的毛毛虫问它来干什么，蜗牛说：苹果成熟的时候我就到了。',
+                '我问电风扇我帅不帅，结果电风扇摇了一晚上的头。'
+            ]);
+        if (/帮助|怎么用|功能|能做什么|aide|hilfe|помощь|help|traduction|перевод|翻译|übersetzung/.test(t))
+            return '你可以：一，点击麦克风用语音和我对话；二，在文字框输入消息；三，在设置中接入 AI 接口获得更智能的回复；四，切换到录音模式录制音频；五，切换到翻译模式进行中、英、法、德、俄、日、韩七种语言的互译。';
+        if (/计算|算一下|多少|calculer|berechnen|посчитать|calculate/.test(t)) {
+            const mathMatch = text.match(/[\d+\-*/().^ ]+/);
+            if (mathMatch) {
+                try {
+                    const result = Function('"use strict"; return (' + mathMatch[0] + ')')();
+                    if (typeof result === 'number' && isFinite(result)) return `计算结果是：${result}`;
+                } catch {}
+            }
+            return '请说出你想计算的算式，比如"计算 123 乘以 456"。';
+        }
+        if (/法语|法文|français|french/.test(t))
+            return '我支持法语（Français）。你可以在设置中将识别语言切换为法语，或在翻译模式中选择法语进行翻译。';
+        if (/德语|德文|deutsch|german/.test(t))
+            return '我支持德语（Deutsch）。你可以在设置中将识别语言切换为德语，或在翻译模式中选择德语进行翻译。';
+        if (/俄语|俄文|русский|russian/.test(t))
+            return '我支持俄语（Русский）。你可以在设置中将识别语言切换为俄语，或在翻译模式中选择俄语进行翻译。';
+        if (/语言|哪些语言|支持.*语言|langues|sprachen|языки|languages/.test(t))
+            return '我目前支持七种语言：中文、English、Français（法语）、Deutsch（德语）、Русский（俄语）、日本語和한국어。你可以在设置中切换识别语言，或在翻译模式中进行七种语言的互译。';
+
+        return this.pick([
+            `我听到你说的是「${text}」。在设置中接入 AI 接口后，我可以给出更详细的回答。`,
+            `「${text}」—— 这是个有趣的话题。本地模式下我的回复比较简单，试试接入 API 获得更智能的对话体验。`,
+            `收到！你说了「${text}」。如果需要更深入的交流，可以在设置中配置 API 密钥。`
+        ]);
+    }
+
+    async getAPIResponse(userMessage) {
+        const messages = [
+            { role: 'system', content: this.settings.systemPrompt },
+            ...this.chatHistory.slice(-10).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
+            { role: 'user', content: userMessage }
+        ];
+        const resp = await fetch(this.settings.apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.settings.apiKey}` },
+            body: JSON.stringify({ model: this.settings.model, messages, max_tokens: 500, temperature: 0.7 }),
+        });
+        if (!resp.ok) { const e = await resp.text(); throw new Error(`HTTP ${resp.status}: ${e.slice(0, 100)}`); }
+        const data = await resp.json();
+        return data.choices?.[0]?.message?.content || '未收到有效回复';
+    }
+
+    // ── TTS ──
+
+    speak(text) {
+        this.synthesis.cancel();
+        const cleaned = text.replace(/[「」『』""''《》【】]/g, '');
+        const utterance = new SpeechSynthesisUtterance(cleaned);
+        utterance.lang = this.settings.language;
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        const voices = this.synthesis.getVoices();
+        const match = voices.find(v => v.lang.startsWith(this.settings.language.split('-')[0]) && v.localService);
+        if (match) utterance.voice = match;
+
+        utterance.onstart = () => {
+            this.setState('speaking');
+            this.setStatus('正在回复...', 'active');
+            this.el.micBtn.classList.add('speaking');
+        };
+        const onEnd = () => {
+            this.el.micBtn.classList.remove('speaking');
+            this.setState('idle');
+            this.setStatus(this.mode === 'translate' ? '点击麦克风开始翻译' : '点击麦克风开始对话');
+        };
+        utterance.onend = onEnd;
+        utterance.onerror = onEnd;
+        this.synthesis.speak(utterance);
+    }
+
+    // ── Chat ──
+
+    addMessage(role, content) {
+        this.chatHistory.push({ role, content, time: new Date() });
+        this.el.emptyState.style.display = 'none';
+        const msg = document.createElement('div');
+        msg.className = `message ${role}`;
+        const meta = document.createElement('div');
+        meta.className = 'message-meta';
+        meta.textContent = `${role === 'user' ? '你' : '助手'} · ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+        bubble.textContent = content;
+        msg.appendChild(meta);
+        msg.appendChild(bubble);
+        this.el.chatMessages.appendChild(msg);
+        this.el.chatMessages.scrollTop = this.el.chatMessages.scrollHeight;
+    }
+
+    clearChat() {
+        this.chatHistory = [];
+        this.el.chatMessages.innerHTML = '';
+        this.el.emptyState.style.display = '';
+        this.el.chatMessages.appendChild(this.el.emptyState);
+    }
+
+    // ── Visualization (GPU Optimized) ──
+
+    startIdleAnimation() {
+        let lastDraw = 0;
+        const interval = 1000 / 20; // 20fps for idle — no visual difference, much cheaper
+        const draw = (now) => {
+            this.idleAnimId = requestAnimationFrame(draw);
+            if (now - lastDraw < interval) return;
+            lastDraw = now;
+
+            const { ctx, el: { canvas } } = this;
+            const W = canvas.width, H = canvas.height;
+            const cx = W / 2, cy = H / 2;
+            ctx.clearRect(0, 0, W, H);
+
+            const time = now / 1000;
+            const dots = 32;
+            const radius = 64;
+
+            for (let i = 0; i < dots; i++) {
+                const angle = (i / dots) * 6.2832 + time * 0.25;
+                const x = cx + Math.cos(angle) * radius;
+                const y = cy + Math.sin(angle) * radius;
+                const alpha = 0.12 + 0.08 * Math.sin(time * 1.5 + i * 0.4);
+                const size = 1.2 + 0.6 * Math.sin(time * 2 + i * 0.3);
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, 6.2832);
+                ctx.fillStyle = `rgba(0, 219, 181, ${alpha})`;
+                ctx.fill();
+            }
+        };
+        this.idleAnimId = requestAnimationFrame(draw);
+    }
+
+    stopIdleAnimation() {
+        if (this.idleAnimId) { cancelAnimationFrame(this.idleAnimId); this.idleAnimId = null; }
+    }
+
+    drawActiveVisualization() {
+        let lastDraw = 0;
+        const interval = 1000 / 30; // 30fps for active viz
+        const draw = (now) => {
+            this.vizAnimId = requestAnimationFrame(draw);
+            if (now - lastDraw < interval) return;
+            lastDraw = now;
+
+            const { ctx, el: { canvas }, analyser } = this;
+            const W = canvas.width, H = canvas.height;
+            const cx = W / 2, cy = H / 2;
+            ctx.clearRect(0, 0, W, H);
+
+            if (!analyser) return;
+
+            const bufLen = analyser.frequencyBinCount;
+            if (!this._vizBuf || this._vizBuf.length !== bufLen) this._vizBuf = new Uint8Array(bufLen);
+            analyser.getByteFrequencyData(this._vizBuf);
+            const data = this._vizBuf;
+
+            const bars = 64;
+            const innerR = 62;
+            const maxH = 45;
+
+            for (let i = 0; i < bars; i++) {
+                const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
+                const di = Math.floor(i * bufLen / bars);
+                const val = data[di] / 255;
+                const barH = Math.max(2, val * maxH);
+                const x1 = cx + Math.cos(angle) * innerR;
+                const y1 = cy + Math.sin(angle) * innerR;
+                const x2 = cx + Math.cos(angle) * (innerR + barH);
+                const y2 = cy + Math.sin(angle) * (innerR + barH);
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+
+                if (this.state === 'recording') {
+                    ctx.strokeStyle = `rgba(255, 71, 87, ${0.3 + val * 0.7})`;
+                } else if (this.state === 'speaking') {
+                    ctx.strokeStyle = `rgba(124, 92, 252, ${0.3 + val * 0.7})`;
+                } else if (this.mode === 'translate') {
+                    ctx.strokeStyle = `rgba(255, 183, 77, ${0.3 + val * 0.7})`;
+                } else {
+                    ctx.strokeStyle = `rgba(0, 219, 181, ${0.3 + val * 0.7})`;
+                }
+                ctx.lineWidth = 2.5;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+            }
+            this.vizAnimId = requestAnimationFrame(draw);
+        };
+        this.vizAnimId = requestAnimationFrame(draw);
+    }
+
+    stopVisualization() {
+        if (this.vizAnimId) { cancelAnimationFrame(this.vizAnimId); this.vizAnimId = null; }
+        this.ctx.clearRect(0, 0, this.el.canvas.width, this.el.canvas.height);
+    }
+
+    // ── State ──
+
+    setState(state) {
+        this.state = state;
+        this.el.micBtn.classList.remove('listening', 'speaking', 'rec-mic', 'translate-mic');
+        if (state === 'listening') {
+            this.el.micBtn.classList.add('listening');
+            if (this.mode === 'translate') this.el.micBtn.classList.add('translate-mic');
+        }
+    }
+
+    setStatus(text, cls) {
+        this.el.statusText.textContent = text;
+        this.el.statusText.className = 'status' + (cls ? ` ${cls}` : '');
+    }
+
+    // ── Settings ──
+
+    openSettings() { this.el.settingsOverlay.classList.add('open'); this.el.settingsPanel.classList.add('open'); }
+    closeSettings() { this.el.settingsOverlay.classList.remove('open'); this.el.settingsPanel.classList.remove('open'); }
+
+    updateResponseModeUI() {
+        const isApi = this.settings.responseMode === 'api';
+        this.updateToggleUI(this.el.responseModeToggle, isApi ? 'api' : 'local');
+        this.el.apiSettings.classList.toggle('hidden', !isApi);
+        this.el.apiKeyGroup.classList.toggle('hidden', !isApi);
+        this.el.modelGroup.classList.toggle('hidden', !isApi);
+        this.el.systemPromptGroup.classList.toggle('hidden', !isApi);
+    }
+
+    updateToggleUI(container, value) {
+        container.querySelectorAll('.mode-option').forEach(btn => btn.classList.toggle('active', btn.dataset.value === value));
+    }
+
+    applySettingsToUI() {
+        this.el.apiEndpoint.value = this.settings.apiEndpoint;
+        this.el.apiKey.value = this.settings.apiKey;
+        this.el.modelName.value = this.settings.model;
+        this.el.systemPrompt.value = this.settings.systemPrompt;
+        this.el.langSelect.value = this.settings.language;
+        this.updateResponseModeUI();
+        this.updateToggleUI(this.el.ttsToggle, this.settings.ttsEnabled ? 'on' : 'off');
+        this.loadTranslationSettings();
+    }
+
+    saveSettings() {
+        this.settings.apiEndpoint = this.el.apiEndpoint.value;
+        this.settings.apiKey = this.el.apiKey.value;
+        this.settings.model = this.el.modelName.value;
+        this.settings.systemPrompt = this.el.systemPrompt.value;
+        this.settings.language = this.el.langSelect.value;
+        try { localStorage.setItem('vox-settings', JSON.stringify(this.settings)); } catch {}
+    }
+
+    loadSettings() {
+        try { const saved = JSON.parse(localStorage.getItem('vox-settings')); if (saved) Object.assign(this.settings, saved); } catch {}
+    }
+
+    // ── Utilities ──
+
+    notify(message, type = 'info') {
+        const el = this.el.notification;
+        el.textContent = message;
+        el.className = `notification show ${type}`;
+        clearTimeout(this._notifyTimer);
+        this._notifyTimer = setTimeout(() => { el.className = 'notification'; }, 3000);
+    }
+
+    pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+}
+
+document.addEventListener('DOMContentLoaded', () => { window.voxApp = new VoiceApp(); });
+</script>
+</body>
+</html>
