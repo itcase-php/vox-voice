@@ -427,6 +427,43 @@
         .notification.show { transform: translateX(-50%) translateY(0); }
         .notification.error { border-color: rgba(255,71,87,0.3); color: var(--danger); }
 
+        .recording-translation {
+            margin: 8px 0; padding: 14px 16px; border-radius: var(--radius);
+            border: 1px solid var(--border); background: var(--surface-raised);
+            animation: msgIn 0.3s ease;
+        }
+        .recording-translation-controls {
+            display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+        }
+        .recording-translation-label {
+            font-family: 'DM Mono', monospace; font-size: 0.68rem;
+            letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber);
+        }
+        .recording-lang-select {
+            padding: 6px 28px 6px 10px; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--bg);
+            color: var(--text); font-family: 'Noto Sans SC', sans-serif;
+            font-size: 0.78rem; outline: none; cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 8px center;
+        }
+        .recording-lang-select:focus { border-color: var(--amber); }
+        .recording-translation-panels { display: flex; gap: 12px; align-items: flex-start; }
+        .recording-trans-panel { flex: 1; }
+        .recording-trans-label {
+            font-family: 'DM Mono', monospace; font-size: 0.6rem;
+            letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px;
+        }
+        .recording-trans-text {
+            font-size: 0.88rem; line-height: 1.6; color: var(--text);
+            word-break: break-word; min-height: 1.6em;
+        }
+        .recording-trans-text.placeholder { color: var(--text-muted); font-style: italic; font-size: 0.82rem; }
+        .recording-trans-arrow {
+            display: flex; align-items: center; justify-content: center;
+            color: var(--amber); font-size: 1.2rem; padding-top: 22px; flex-shrink: 0; width: 24px;
+        }
+
         @media (max-width: 480px) {
             .app { padding: 16px; }
             .mic-btn { width: 80px; height: 80px; }
@@ -434,6 +471,8 @@
             .message-bubble { max-width: 92%; }
             .controls { gap: 6px; }
             .control-btn { padding: 6px 14px; font-size: 0.65rem; }
+            .recording-translation-panels { flex-direction: column; }
+            .recording-trans-arrow { padding-top: 0; transform: rotate(90deg); }
         }
     </style>
 </head>
@@ -477,6 +516,32 @@
         <span class="recording-time" id="recordingTime">00:00</span>
         <audio id="audioPlayer" class="audio-player" controls title="录音回放"></audio>
         <button class="download-btn" id="downloadBtn" title="下载录音" aria-label="下载录音">下载</button>
+    </div>
+
+    <div class="recording-translation hidden" id="recordingTranslation">
+        <div class="recording-translation-controls">
+            <span class="recording-translation-label">实时翻译</span>
+            <select class="recording-lang-select" id="recordingTargetLang" title="翻译目标语言" aria-label="翻译目标语言">
+                <option value="en-US" selected>English</option>
+                <option value="zh-CN">中文</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="ru-RU">Русский</option>
+                <option value="ja-JP">日本語</option>
+                <option value="ko-KR">한국어</option>
+            </select>
+        </div>
+        <div class="recording-translation-panels">
+            <div class="recording-trans-panel">
+                <div class="recording-trans-label">原文</div>
+                <div class="recording-trans-text placeholder" id="recordingSourceText">等待语音输入...</div>
+            </div>
+            <div class="recording-trans-arrow">→</div>
+            <div class="recording-trans-panel">
+                <div class="recording-trans-label">译文</div>
+                <div class="recording-trans-text placeholder" id="recordingTargetText">等待翻译...</div>
+            </div>
+        </div>
     </div>
 
     <section class="chat-section" id="chatSection">
@@ -686,6 +751,12 @@ class VoiceApp {
         this.recordingTimer = null;
         this.recordingSeconds = 0;
 
+        this.isRecordingRecognition = false;
+        this.recordingSourceAccum = '';
+        this.recordingTranslationAccum = '';
+        this.recordingTranslationQueue = [];
+        this.recordingTranslationProcessing = false;
+
         this.recognition = null;
         this.synthesis = window.speechSynthesis;
         this.recognitionSupported = false;
@@ -748,6 +819,10 @@ class VoiceApp {
             targetText:           document.getElementById('targetText'),
             translationHistory:   document.getElementById('translationHistory'),
             clearTranslationBtn:  document.getElementById('clearTranslationBtn'),
+            recordingTranslation: document.getElementById('recordingTranslation'),
+            recordingTargetLang:  document.getElementById('recordingTargetLang'),
+            recordingSourceText:  document.getElementById('recordingSourceText'),
+            recordingTargetText:  document.getElementById('recordingTargetText'),
         };
         this.ctx = this.el.canvas.getContext('2d');
     }
@@ -781,15 +856,40 @@ class VoiceApp {
                 if (event.results[i].isFinal) final += t;
                 else interim += t;
             }
+
+            if (this.isRecordingRecognition) {
+                if (interim) {
+                    this.el.recordingSourceText.textContent = this.recordingSourceAccum + interim;
+                    this.el.recordingSourceText.classList.remove('placeholder');
+                    this.setStatus(`正在识别: ${interim}`, 'recording');
+                }
+                if (final) {
+                    this.recordingSourceAccum += final;
+                    this.el.recordingSourceText.textContent = this.recordingSourceAccum;
+                    this.el.recordingSourceText.classList.remove('placeholder');
+                    this.translateRecordingSegment(final.trim());
+                }
+                return;
+            }
+
             if (interim) this.setStatus(`正在识别: ${interim}`, this.mode === 'translate' ? 'translating' : 'active');
             if (final) this.onSpeechResult(final.trim());
         };
 
         this.recognition.onend = () => {
             if (this.state === 'listening') this.stopListening();
+            else if (this.isRecordingRecognition) {
+                try { this.recognition.start(); } catch {}
+            }
         };
 
         this.recognition.onerror = (e) => {
+            if (this.isRecordingRecognition) {
+                if (e.error !== 'aborted' && e.error !== 'no-speech') {
+                    this.notify(`语音识别错误: ${e.error}`, 'error');
+                }
+                return;
+            }
             if (e.error === 'no-speech') this.notify('未检测到语音，请重试');
             else if (e.error === 'not-allowed') this.notify('麦克风权限被拒绝，请在浏览器设置中允许', 'error');
             else if (e.error !== 'aborted') this.notify(`语音识别错误: ${e.error}`, 'error');
@@ -855,6 +955,12 @@ class VoiceApp {
         });
 
         this.el.swapLangBtn.addEventListener('click', () => this.swapLanguages());
+        this.el.recordingTargetLang.addEventListener('change', () => {
+            this.recordingTranslationAccum = '';
+            this.recordingTranslationQueue = [];
+            this.el.recordingTargetText.textContent = '等待翻译...';
+            this.el.recordingTargetText.classList.add('placeholder');
+        });
         this.el.clearTranslationBtn.addEventListener('click', () => this.clearTranslationHistory());
         this.el.sourceLang.addEventListener('change', () => this.saveTranslationSettings());
         this.el.targetLang.addEventListener('change', () => this.saveTranslationSettings());
@@ -872,6 +978,7 @@ class VoiceApp {
         this.el.chatSection.classList.toggle('hidden', mode === 'translate');
         this.el.translationSection.classList.toggle('hidden', mode !== 'translate');
         this.el.recordingBar.classList.remove('visible');
+        this.clearRecordingTranslation();
 
         if (mode === 'chat') {
             this.setStatus('点击麦克风开始对话');
@@ -941,6 +1048,18 @@ class VoiceApp {
     startRecording() {
         this.recordedChunks = [];
         this.recordingSeconds = 0;
+        this.recordingSourceAccum = '';
+        this.recordingTranslationAccum = '';
+        this.recordingTranslationQueue = [];
+        this.recordingTranslationProcessing = false;
+        this.isRecordingRecognition = true;
+
+        this.el.recordingSourceText.textContent = '等待语音输入...';
+        this.el.recordingSourceText.classList.add('placeholder');
+        this.el.recordingTargetText.textContent = '等待翻译...';
+        this.el.recordingTargetText.classList.add('placeholder');
+        this.el.recordingTranslation.classList.remove('hidden');
+
         this.mediaRecorder = new MediaRecorder(this.mediaStream);
         this.mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) this.recordedChunks.push(e.data); };
         this.mediaRecorder.onstop = () => {
@@ -950,6 +1069,12 @@ class VoiceApp {
             clearInterval(this.recordingTimer);
         };
         this.mediaRecorder.start(100);
+
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+        this.recognition.lang = this.settings.language;
+        try { this.recognition.start(); } catch {}
+
         this.setState('recording');
         this.setStatus('录音中...', 'recording');
         this.el.micBtn.classList.add('rec-mic');
@@ -965,12 +1090,20 @@ class VoiceApp {
     }
 
     stopRecording() {
+        this.isRecordingRecognition = false;
+        this.recognition.continuous = false;
+        try { this.recognition.stop(); } catch {}
+
         if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
         this.el.micBtn.classList.remove('rec-mic');
         this.setState('idle');
         this.setStatus('录音完成，可回放或下载');
         this.stopVisualization();
         this.startIdleAnimation();
+
+        if (this.recordingSourceAccum) {
+            this.notify('录音完成，翻译已显示');
+        }
     }
 
     downloadRecording() {
@@ -1010,6 +1143,7 @@ class VoiceApp {
                 if (saved.target) this.el.targetLang.value = saved.target;
             }
         } catch {}
+        this.el.recordingTargetLang.value = this.el.targetLang.value;
     }
 
     async handleTranslationInput(text) {
@@ -1165,6 +1299,49 @@ class VoiceApp {
         this.el.sourceText.classList.add('placeholder');
         this.el.targetText.textContent = '等待翻译...';
         this.el.targetText.classList.add('placeholder');
+    }
+
+    translateRecordingSegment(text) {
+        if (!text) return;
+        this.recordingTranslationQueue.push(text);
+        if (!this.recordingTranslationProcessing) this.processRecordingTranslationQueue();
+    }
+
+    async processRecordingTranslationQueue() {
+        this.recordingTranslationProcessing = true;
+        while (this.recordingTranslationQueue.length > 0) {
+            const text = this.recordingTranslationQueue.shift();
+            const fromLang = this.settings.language;
+            const toLang = this.el.recordingTargetLang.value;
+
+            let translated;
+            try {
+                if (this.settings.responseMode === 'api' && this.settings.apiKey) {
+                    translated = await this.getAPITranslation(text, fromLang, toLang);
+                } else {
+                    translated = this.getLocalTranslation(text, fromLang, toLang);
+                }
+            } catch (err) {
+                translated = `[翻译错误: ${err.message}]`;
+            }
+
+            this.recordingTranslationAccum += (this.recordingTranslationAccum ? '\n' : '') + translated;
+            this.el.recordingTargetText.textContent = this.recordingTranslationAccum;
+            this.el.recordingTargetText.classList.remove('placeholder');
+        }
+        this.recordingTranslationProcessing = false;
+    }
+
+    clearRecordingTranslation() {
+        this.recordingSourceAccum = '';
+        this.recordingTranslationAccum = '';
+        this.recordingTranslationQueue = [];
+        this.recordingTranslationProcessing = false;
+        this.el.recordingSourceText.textContent = '等待语音输入...';
+        this.el.recordingSourceText.classList.add('placeholder');
+        this.el.recordingTargetText.textContent = '等待翻译...';
+        this.el.recordingTargetText.classList.add('placeholder');
+        this.el.recordingTranslation.classList.add('hidden');
     }
 
     escapeHtml(str) {
