@@ -6,7 +6,7 @@
     <title>Vox — 语音交互助手</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
     <style>
         :root {
             --bg: #07080d;
@@ -95,6 +95,7 @@
         .visualizer-canvas {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%); pointer-events: none;
+            will-change: contents;
         }
 
         .mic-btn {
@@ -764,7 +765,21 @@ class VoiceApp {
         this.vizAnimId = null;
         this.idleAnimId = null;
 
+        this.buildPhrasebookIndex();
         this.init();
+    }
+
+    buildPhrasebookIndex() {
+        this._phraseMap = new Map();
+        this._phraseMapLC = new Map();
+        for (const entry of PHRASEBOOK) {
+            for (const [lang, text] of Object.entries(entry)) {
+                if (lang === 'id') continue;
+                const key = `${lang}|${text}`;
+                this._phraseMap.set(key, entry);
+                this._phraseMapLC.set(`${lang}|${text.toLowerCase()}`, entry);
+            }
+        }
     }
 
     init() {
@@ -1187,22 +1202,33 @@ class VoiceApp {
         const fromName = LANG_NAMES[fromLang] || fromLang;
         const toName = LANG_NAMES[toLang] || toLang;
 
-        const resp = await fetch(this.settings.apiEndpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${this.settings.apiKey}`,
-            },
-            body: JSON.stringify({
-                model: this.settings.model,
-                messages: [
-                    { role: 'system', content: '你是一个专业的翻译助手。只输出翻译结果，不添加任何解释、注释或额外文字。' },
-                    { role: 'user', content: `将以下${fromName}文本翻译成${toName}：\n${text}` }
-                ],
-                max_tokens: 300,
-                temperature: 0.2,
-            }),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        let resp;
+        try {
+            resp = await fetch(this.settings.apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${this.settings.apiKey}`,
+                },
+                signal: controller.signal,
+                body: JSON.stringify({
+                    model: this.settings.model,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are a professional translator. Translate accurately and naturally between ${fromName} and ${toName}. Rules:\n1. Output ONLY the translated text, nothing else.\n2. Preserve the original meaning, tone, and style.\n3. Use natural, idiomatic expressions in the target language.\n4. Do not add explanations, notes, quotes, or any extra formatting.\n5. If the input is already in the target language, translate it to the source language instead.`
+                        },
+                        { role: 'user', content: text }
+                    ],
+                    max_tokens: 1024,
+                    temperature: 0.1,
+                }),
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
 
         if (!resp.ok) {
             const errBody = await resp.text();
@@ -1215,25 +1241,28 @@ class VoiceApp {
 
     getLocalTranslation(text, fromLang, toLang) {
         const trimmed = text.trim();
+        if (!trimmed) return '';
 
-        for (const entry of PHRASEBOOK) {
-            if (entry[fromLang] && entry[fromLang] === trimmed) {
-                return entry[toLang] || trimmed;
-            }
-        }
+        // O(1) exact match
+        const exact = this._phraseMap.get(`${fromLang}|${trimmed}`);
+        if (exact && exact[toLang]) return exact[toLang];
 
-        for (const entry of PHRASEBOOK) {
-            if (entry[fromLang] && entry[fromLang].toLowerCase() === trimmed.toLowerCase()) {
-                return entry[toLang] || trimmed;
-            }
-        }
+        // O(1) case-insensitive match
+        const ci = this._phraseMapLC.get(`${fromLang}|${trimmed.toLowerCase()}`);
+        if (ci && ci[toLang]) return ci[toLang];
 
+        // Partial / substring match — try longest match first for better accuracy
+        let bestMatch = null;
+        let bestLen = 0;
         for (const entry of PHRASEBOOK) {
             const src = entry[fromLang];
-            if (src && trimmed.includes(src)) {
-                return entry[toLang] || trimmed;
+            if (!src) continue;
+            if (trimmed.includes(src) && src.length > bestLen) {
+                bestMatch = entry;
+                bestLen = src.length;
             }
         }
+        if (bestMatch && bestMatch[toLang]) return bestMatch[toLang];
 
         return `[本地模式] 无法翻译「${trimmed}」。接入 API 模式可获得更准确的翻译。`;
     }
@@ -1303,24 +1332,34 @@ class VoiceApp {
 
     translateRecordingSegment(text) {
         if (!text) return;
+        const fromLang = this.settings.language;
+        const toLang = this.el.recordingTargetLang.value;
+
+        // Local mode: translate synchronously, no queue needed
+        if (this.settings.responseMode !== 'api' || !this.settings.apiKey) {
+            const translated = this.getLocalTranslation(text, fromLang, toLang);
+            this.recordingTranslationAccum += (this.recordingTranslationAccum ? '\n' : '') + translated;
+            this.el.recordingTargetText.textContent = this.recordingTranslationAccum;
+            this.el.recordingTargetText.classList.remove('placeholder');
+            return;
+        }
+
+        // API mode: use queue to avoid flooding
         this.recordingTranslationQueue.push(text);
         if (!this.recordingTranslationProcessing) this.processRecordingTranslationQueue();
     }
 
     async processRecordingTranslationQueue() {
         this.recordingTranslationProcessing = true;
+        const fromLang = this.settings.language;
+        const toLang = this.el.recordingTargetLang.value;
+
         while (this.recordingTranslationQueue.length > 0) {
             const text = this.recordingTranslationQueue.shift();
-            const fromLang = this.settings.language;
-            const toLang = this.el.recordingTargetLang.value;
 
             let translated;
             try {
-                if (this.settings.responseMode === 'api' && this.settings.apiKey) {
-                    translated = await this.getAPITranslation(text, fromLang, toLang);
-                } else {
-                    translated = this.getLocalTranslation(text, fromLang, toLang);
-                }
+                translated = await this.getAPITranslation(text, fromLang, toLang);
             } catch (err) {
                 translated = `[翻译错误: ${err.message}]`;
             }
@@ -1447,11 +1486,19 @@ class VoiceApp {
             ...this.chatHistory.slice(-10).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
             { role: 'user', content: userMessage }
         ];
-        const resp = await fetch(this.settings.apiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.settings.apiKey}` },
-            body: JSON.stringify({ model: this.settings.model, messages, max_tokens: 500, temperature: 0.7 }),
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        let resp;
+        try {
+            resp = await fetch(this.settings.apiEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.settings.apiKey}` },
+                signal: controller.signal,
+                body: JSON.stringify({ model: this.settings.model, messages, max_tokens: 500, temperature: 0.7 }),
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
         if (!resp.ok) { const e = await resp.text(); throw new Error(`HTTP ${resp.status}: ${e.slice(0, 100)}`); }
         const data = await resp.json();
         return data.choices?.[0]?.message?.content || '未收到有效回复';
@@ -1515,7 +1562,20 @@ class VoiceApp {
 
     startIdleAnimation() {
         let lastDraw = 0;
-        const interval = 1000 / 20; // 20fps for idle — no visual difference, much cheaper
+        const interval = 1000 / 20;
+        const dots = 32;
+        const radius = 64;
+        const TWO_PI = Math.PI * 2;
+        // Precompute base angles
+        const baseAngles = new Float32Array(dots);
+        const dotPhaseA = new Float32Array(dots);
+        const dotPhaseB = new Float32Array(dots);
+        for (let i = 0; i < dots; i++) {
+            baseAngles[i] = (i / dots) * TWO_PI;
+            dotPhaseA[i] = i * 0.4;
+            dotPhaseB[i] = i * 0.3;
+        }
+
         const draw = (now) => {
             this.idleAnimId = requestAnimationFrame(draw);
             if (now - lastDraw < interval) return;
@@ -1527,17 +1587,17 @@ class VoiceApp {
             ctx.clearRect(0, 0, W, H);
 
             const time = now / 1000;
-            const dots = 32;
-            const radius = 64;
+            const rotOffset = time * 0.25;
 
+            ctx.fillStyle = 'rgba(0, 219, 181, 0)'; // set once
             for (let i = 0; i < dots; i++) {
-                const angle = (i / dots) * 6.2832 + time * 0.25;
+                const angle = baseAngles[i] + rotOffset;
                 const x = cx + Math.cos(angle) * radius;
                 const y = cy + Math.sin(angle) * radius;
-                const alpha = 0.12 + 0.08 * Math.sin(time * 1.5 + i * 0.4);
-                const size = 1.2 + 0.6 * Math.sin(time * 2 + i * 0.3);
+                const alpha = 0.12 + 0.08 * Math.sin(time * 1.5 + dotPhaseA[i]);
+                const size = 1.2 + 0.6 * Math.sin(time * 2 + dotPhaseB[i]);
                 ctx.beginPath();
-                ctx.arc(x, y, size, 0, 6.2832);
+                ctx.arc(x, y, size, 0, TWO_PI);
                 ctx.fillStyle = `rgba(0, 219, 181, ${alpha})`;
                 ctx.fill();
             }
@@ -1551,7 +1611,7 @@ class VoiceApp {
 
     drawActiveVisualization() {
         let lastDraw = 0;
-        const interval = 1000 / 30; // 30fps for active viz
+        const interval = 1000 / 30;
         const draw = (now) => {
             this.vizAnimId = requestAnimationFrame(draw);
             if (now - lastDraw < interval) return;
@@ -1572,35 +1632,42 @@ class VoiceApp {
             const bars = 64;
             const innerR = 62;
             const maxH = 45;
+            const TWO_PI = Math.PI * 2;
+            const baseColor = this.state === 'recording' ? [255, 71, 87]
+                : this.state === 'speaking' ? [124, 92, 252]
+                : this.mode === 'translate' ? [255, 183, 77]
+                : [0, 219, 181];
+            const [cr, cg, cb] = baseColor;
 
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+
+            // Group bars by alpha bucket (8 levels) to reduce state changes
+            const buckets = new Map();
             for (let i = 0; i < bars; i++) {
-                const angle = (i / bars) * Math.PI * 2 - Math.PI / 2;
+                const angle = (i / bars) * TWO_PI - Math.PI / 2;
                 const di = Math.floor(i * bufLen / bars);
                 const val = data[di] / 255;
                 const barH = Math.max(2, val * maxH);
+                const alpha = ((0.3 + val * 0.7) * 10 | 0) / 10; // quantize to 0.1 steps
                 const x1 = cx + Math.cos(angle) * innerR;
                 const y1 = cy + Math.sin(angle) * innerR;
                 const x2 = cx + Math.cos(angle) * (innerR + barH);
                 const y2 = cy + Math.sin(angle) * (innerR + barH);
 
-                ctx.beginPath();
-                ctx.moveTo(x1, y1);
-                ctx.lineTo(x2, y2);
+                if (!buckets.has(alpha)) buckets.set(alpha, []);
+                buckets.get(alpha).push(x1, y1, x2, y2);
+            }
 
-                if (this.state === 'recording') {
-                    ctx.strokeStyle = `rgba(255, 71, 87, ${0.3 + val * 0.7})`;
-                } else if (this.state === 'speaking') {
-                    ctx.strokeStyle = `rgba(124, 92, 252, ${0.3 + val * 0.7})`;
-                } else if (this.mode === 'translate') {
-                    ctx.strokeStyle = `rgba(255, 183, 77, ${0.3 + val * 0.7})`;
-                } else {
-                    ctx.strokeStyle = `rgba(0, 219, 181, ${0.3 + val * 0.7})`;
+            for (const [alpha, coords] of buckets) {
+                ctx.beginPath();
+                ctx.strokeStyle = `rgba(${cr},${cg},${cb},${alpha})`;
+                for (let j = 0; j < coords.length; j += 4) {
+                    ctx.moveTo(coords[j], coords[j + 1]);
+                    ctx.lineTo(coords[j + 2], coords[j + 3]);
                 }
-                ctx.lineWidth = 2.5;
-                ctx.lineCap = 'round';
                 ctx.stroke();
             }
-            this.vizAnimId = requestAnimationFrame(draw);
         };
         this.vizAnimId = requestAnimationFrame(draw);
     }
