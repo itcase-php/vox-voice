@@ -18,6 +18,12 @@
             --accent-glow: rgba(0, 219, 181, 0.2);
             --purple: #7c5cfc;
             --purple-soft: rgba(124, 92, 252, 0.12);
+            --sky: #5bade6;
+            --sky-soft: rgba(91, 173, 230, 0.12);
+            --sky-glow: rgba(91, 173, 230, 0.2);
+            --navy: #1a3050;
+            --navy-soft: rgba(26, 48, 80, 0.15);
+            --navy-deep: #0f1e33;
             --amber: #ffb74d;
             --amber-soft: rgba(255, 183, 77, 0.12);
             --text: #e2e0dc;
@@ -47,7 +53,9 @@
             background:
                 radial-gradient(ellipse at 50% 30%, #0d1a25 0%, transparent 50%),
                 radial-gradient(ellipse at 20% 80%, #0d0a1a 0%, transparent 40%),
-                radial-gradient(ellipse at 80% 70%, #0a1515 0%, transparent 40%);
+                radial-gradient(ellipse at 80% 70%, #0a1515 0%, transparent 40%),
+                radial-gradient(ellipse at 30% 50%, var(--navy-deep) 0%, transparent 55%),
+                radial-gradient(ellipse at 70% 40%, rgba(15,30,51,0.4) 0%, transparent 50%);
             z-index: -1; pointer-events: none;
         }
 
@@ -72,7 +80,7 @@
         .logo {
             font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.5rem;
             letter-spacing: -0.02em;
-            background: linear-gradient(135deg, var(--accent), var(--purple));
+            background: linear-gradient(135deg, var(--accent), var(--sky), var(--purple));
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
             background-clip: text;
         }
@@ -129,8 +137,8 @@
         .mic-btn.listening svg { fill: var(--accent); }
         .mic-btn.listening::before, .mic-btn.listening::after { border-color: var(--accent); animation: none; opacity: 0.25; }
 
-        .mic-btn.speaking { border-color: var(--purple); background: var(--purple-soft); box-shadow: 0 0 40px rgba(124,92,252,0.2); }
-        .mic-btn.speaking svg { fill: var(--purple); }
+        .mic-btn.speaking { border-color: var(--sky); background: var(--sky-soft); box-shadow: 0 0 40px var(--sky-glow); }
+        .mic-btn.speaking svg { fill: var(--sky); }
 
         .mic-btn.rec-mic { border-color: var(--danger); background: rgba(255,71,87,0.08); box-shadow: 0 0 30px rgba(255,71,87,0.15); }
         .mic-btn.rec-mic svg { fill: var(--danger); }
@@ -217,7 +225,7 @@
             align-self: flex-end; border-bottom-right-radius: 4px;
         }
         .message.assistant .message-bubble {
-            background: var(--accent-soft); border: 1px solid rgba(0,219,181,0.08);
+            background: var(--sky-soft); border: 1px solid rgba(91,173,230,0.08);
             align-self: flex-start; border-bottom-left-radius: 4px;
         }
 
@@ -330,7 +338,7 @@
             font-size: 0.88rem; outline: none; transition: border-color 0.2s;
         }
         .text-input::placeholder { color: var(--text-muted); }
-        .text-input:focus { border-color: var(--accent); }
+        .text-input:focus { border-color: var(--sky); }
 
         .send-btn {
             width: 44px; height: 44px; border-radius: var(--radius-sm);
@@ -350,7 +358,7 @@
 
         .settings-panel {
             position: fixed; right: 0; top: 0; bottom: 0;
-            width: 360px; max-width: 90vw; background: var(--surface);
+            width: 360px; max-width: 90vw; background: var(--navy-deep);
             border-left: 1px solid var(--border); z-index: 101;
             transform: translateX(100%); transition: transform 0.3s ease;
             padding: 24px; overflow-y: auto;
@@ -379,15 +387,15 @@
         }
         .settings-input {
             width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
-            border: 1px solid var(--border); background: var(--bg);
+            border: 1px solid var(--border); background: var(--navy-soft);
             color: var(--text); font-family: 'DM Mono', monospace;
             font-size: 0.82rem; outline: none; transition: border-color 0.2s;
         }
-        .settings-input:focus { border-color: var(--accent); }
+        .settings-input:focus { border-color: var(--sky); }
 
         .settings-select {
             width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
-            border: 1px solid var(--border); background: var(--bg);
+            border: 1px solid var(--border); background: var(--navy-soft);
             color: var(--text); font-family: 'Noto Sans SC', sans-serif;
             font-size: 0.82rem; outline: none; cursor: pointer; appearance: none;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
@@ -408,12 +416,12 @@
 
         .settings-textarea {
             width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
-            border: 1px solid var(--border); background: var(--bg);
+            border: 1px solid var(--border); background: var(--navy-soft);
             color: var(--text); font-family: 'Noto Sans SC', sans-serif;
             font-size: 0.82rem; outline: none; resize: vertical; min-height: 60px;
             transition: border-color 0.2s; line-height: 1.5;
         }
-        .settings-textarea:focus { border-color: var(--accent); }
+        .settings-textarea:focus { border-color: var(--sky); }
 
         .notification {
             position: fixed; top: 20px; left: 50%;
@@ -1596,9 +1604,13 @@ class VoiceApp {
                 const y = cy + Math.sin(angle) * radius;
                 const alpha = 0.12 + 0.08 * Math.sin(time * 1.5 + dotPhaseA[i]);
                 const size = 1.2 + 0.6 * Math.sin(time * 2 + dotPhaseB[i]);
+                const blend = (Math.sin(time * 0.8 + i * 0.5) + 1) / 2;
+                const r = Math.round(0 + blend * 91);
+                const g = Math.round(219 - blend * 46);
+                const b = Math.round(181 + blend * 49);
                 ctx.beginPath();
                 ctx.arc(x, y, size, 0, TWO_PI);
-                ctx.fillStyle = `rgba(0, 219, 181, ${alpha})`;
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
                 ctx.fill();
             }
         };
@@ -1634,7 +1646,7 @@ class VoiceApp {
             const maxH = 45;
             const TWO_PI = Math.PI * 2;
             const baseColor = this.state === 'recording' ? [255, 71, 87]
-                : this.state === 'speaking' ? [124, 92, 252]
+                : this.state === 'speaking' ? [91, 173, 230]
                 : this.mode === 'translate' ? [255, 183, 77]
                 : [0, 219, 181];
             const [cr, cg, cb] = baseColor;
