@@ -71,6 +71,7 @@
         .app {
             max-width: 640px; margin: 0 auto; padding: 24px 20px;
             min-height: 100vh; display: flex; flex-direction: column;
+            background: var(--bg);
         }
 
         .header {
@@ -104,6 +105,7 @@
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%); pointer-events: none;
             will-change: contents;
+            max-width: 80vw; max-height: 80vw;
         }
 
         .mic-btn {
@@ -243,13 +245,11 @@
             padding: 8px 0; border-top: 1px solid var(--border);
         }
         .translation-lang-select {
-            flex: 1; padding: 10px 14px; border-radius: var(--radius-sm);
+            flex: 1; padding: 10px 30px 10px 14px; border-radius: var(--radius-sm);
             border: 1px solid var(--border); background: var(--surface);
             color: var(--text); font-family: 'Noto Sans SC', sans-serif;
             font-size: 0.82rem; outline: none; cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 12px center;
+            -webkit-appearance: auto; appearance: auto;
         }
         .translation-lang-select:focus { border-color: var(--amber); }
 
@@ -394,12 +394,11 @@
         .settings-input:focus { border-color: var(--sky); }
 
         .settings-select {
-            width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
+            width: 100%; padding: 10px 30px 10px 14px; border-radius: var(--radius-sm);
             border: 1px solid var(--border); background: var(--navy-soft);
             color: var(--text); font-family: 'Noto Sans SC', sans-serif;
-            font-size: 0.82rem; outline: none; cursor: pointer; appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 12px center;
+            font-size: 0.82rem; outline: none; cursor: pointer;
+            -webkit-appearance: auto; appearance: auto;
         }
 
         .settings-hint { font-size: 0.72rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
@@ -449,12 +448,11 @@
             letter-spacing: 0.08em; text-transform: uppercase; color: var(--amber);
         }
         .recording-lang-select {
-            padding: 6px 28px 6px 10px; border-radius: 6px;
+            padding: 6px 24px 6px 10px; border-radius: 6px;
             border: 1px solid var(--border); background: var(--bg);
             color: var(--text); font-family: 'Noto Sans SC', sans-serif;
-            font-size: 0.78rem; outline: none; cursor: pointer; appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238886a0' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat; background-position: right 8px center;
+            font-size: 0.78rem; outline: none; cursor: pointer;
+            -webkit-appearance: auto; appearance: auto;
         }
         .recording-lang-select:focus { border-color: var(--amber); }
         .recording-translation-panels { display: flex; gap: 12px; align-items: flex-start; }
@@ -473,8 +471,16 @@
             color: var(--amber); font-size: 1.2rem; padding-top: 22px; flex-shrink: 0; width: 24px;
         }
 
+        /* ── Tablet (<=768px) ── */
+        @media (max-width: 768px) {
+            .app { padding: 20px 16px; }
+            .settings-panel { width: 320px; }
+            .chat-messages { max-height: 320px; }
+        }
+
+        /* ── Small Phone (<=480px) ── */
         @media (max-width: 480px) {
-            .app { padding: 16px; }
+            .app { padding: 16px 12px; }
             .mic-btn { width: 80px; height: 80px; }
             .mic-btn svg { width: 28px; height: 28px; }
             .message-bubble { max-width: 92%; }
@@ -482,6 +488,32 @@
             .control-btn { padding: 6px 14px; font-size: 0.65rem; }
             .recording-translation-panels { flex-direction: column; }
             .recording-trans-arrow { padding-top: 0; transform: rotate(90deg); }
+            .settings-panel { width: 85vw; padding: 20px 16px; }
+            .translation-lang-row { flex-wrap: wrap; gap: 8px; }
+            .translation-lang-select { min-width: 0; }
+            .chat-messages { max-height: 260px; }
+            .visualizer-section { padding: 24px 0 8px; }
+        }
+
+        /* ── Very Small Phone (<=360px) ── */
+        @media (max-width: 360px) {
+            .app { padding: 12px 8px; }
+            .mic-btn { width: 72px; height: 72px; }
+            .mic-btn svg { width: 24px; height: 24px; }
+            .logo { font-size: 1.3rem; }
+            .controls { gap: 4px; flex-wrap: wrap; }
+            .control-btn { padding: 6px 10px; font-size: 0.62rem; }
+            .message-bubble { padding: 10px 12px; font-size: 0.84rem; max-width: 95%; }
+            .settings-panel { width: 90vw; padding: 16px 12px; }
+            .settings-title { font-size: 1rem; }
+            .settings-input, .settings-select, .settings-textarea { font-size: 0.78rem; padding: 8px 10px; }
+            .text-input { font-size: 16px; padding: 10px 12px; }
+            .send-btn { width: 40px; height: 40px; }
+            .chat-messages { max-height: 200px; }
+            .notification { font-size: 0.72rem; padding: 10px 16px; max-width: 90vw; white-space: normal; text-align: center; }
+            .translation-card { padding: 12px; min-height: 60px; }
+            .recording-translation { padding: 10px 12px; }
+            .visualizer-section { padding: 20px 0 4px; }
         }
     </style>
 </head>
@@ -792,6 +824,7 @@ class VoiceApp {
 
     init() {
         this.cacheDOM();
+        this.resizeCanvas();
         this.loadSettings();
         this.setupSpeechRecognition();
         this.bindEvents();
@@ -859,6 +892,25 @@ class VoiceApp {
                 this.startIdleAnimation();
             }
         });
+        window.addEventListener('resize', () => {
+            this.resizeCanvas();
+            if (this.state === 'idle') {
+                this.stopIdleAnimation();
+                this.startIdleAnimation();
+            }
+        });
+    }
+
+    resizeCanvas() {
+        const section = this.el.canvas.parentElement;
+        const size = Math.min(300, Math.floor(section.clientWidth * 0.8));
+        const dpr = window.devicePixelRatio || 1;
+        this.el.canvas.width = size * dpr;
+        this.el.canvas.height = size * dpr;
+        this.el.canvas.style.width = size + 'px';
+        this.el.canvas.style.height = size + 'px';
+        this.el.canvas._cssSize = size;
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     // ── Speech Recognition ──
@@ -979,14 +1031,19 @@ class VoiceApp {
 
         this.el.swapLangBtn.addEventListener('click', () => this.swapLanguages());
         this.el.recordingTargetLang.addEventListener('change', () => {
+            this.el.targetLang.value = this.el.recordingTargetLang.value;
             this.recordingTranslationAccum = '';
             this.recordingTranslationQueue = [];
             this.el.recordingTargetText.textContent = '等待翻译...';
             this.el.recordingTargetText.classList.add('placeholder');
+            this.saveTranslationSettings();
         });
         this.el.clearTranslationBtn.addEventListener('click', () => this.clearTranslationHistory());
         this.el.sourceLang.addEventListener('change', () => this.saveTranslationSettings());
-        this.el.targetLang.addEventListener('change', () => this.saveTranslationSettings());
+        this.el.targetLang.addEventListener('change', () => {
+            this.el.recordingTargetLang.value = this.el.targetLang.value;
+            this.saveTranslationSettings();
+        });
     }
 
     // ── Mode ──
@@ -1572,7 +1629,6 @@ class VoiceApp {
         let lastDraw = 0;
         const interval = 1000 / 20;
         const dots = 32;
-        const radius = 64;
         const TWO_PI = Math.PI * 2;
         // Precompute base angles
         const baseAngles = new Float32Array(dots);
@@ -1590,11 +1646,12 @@ class VoiceApp {
             lastDraw = now;
 
             const { ctx, el: { canvas } } = this;
-            const W = canvas.width, H = canvas.height;
-            const cx = W / 2, cy = H / 2;
-            ctx.clearRect(0, 0, W, H);
+            const S = canvas._cssSize || 300;
+            const cx = S / 2, cy = S / 2;
+            ctx.clearRect(0, 0, S, S);
 
             const time = now / 1000;
+            const radius = S * 0.213;
             const rotOffset = time * 0.25;
 
             ctx.fillStyle = 'rgba(0, 219, 181, 0)'; // set once
@@ -1630,9 +1687,9 @@ class VoiceApp {
             lastDraw = now;
 
             const { ctx, el: { canvas }, analyser } = this;
-            const W = canvas.width, H = canvas.height;
-            const cx = W / 2, cy = H / 2;
-            ctx.clearRect(0, 0, W, H);
+            const S = canvas._cssSize || 300;
+            const cx = S / 2, cy = S / 2;
+            ctx.clearRect(0, 0, S, S);
 
             if (!analyser) return;
 
@@ -1642,8 +1699,8 @@ class VoiceApp {
             const data = this._vizBuf;
 
             const bars = 64;
-            const innerR = 62;
-            const maxH = 45;
+            const innerR = S * 0.207;
+            const maxH = S * 0.15;
             const TWO_PI = Math.PI * 2;
             const baseColor = this.state === 'recording' ? [255, 71, 87]
                 : this.state === 'speaking' ? [91, 173, 230]
@@ -1686,7 +1743,8 @@ class VoiceApp {
 
     stopVisualization() {
         if (this.vizAnimId) { cancelAnimationFrame(this.vizAnimId); this.vizAnimId = null; }
-        this.ctx.clearRect(0, 0, this.el.canvas.width, this.el.canvas.height);
+        const S = this.el.canvas._cssSize || 300;
+        this.ctx.clearRect(0, 0, S, S);
     }
 
     // ── State ──
